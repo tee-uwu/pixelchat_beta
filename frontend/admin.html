@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pixel Chat - Admin</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet"/>
+
+  <style>
+    body {
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      font-family: 'Courier New', monospace;
+    }
+
+    .glass {
+      backdrop-filter: blur(20px);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+  </style>
+</head>
+
+<body class="min-h-screen p-6">
+
+  <div class="flex justify-between items-center mb-6">
+    <h1 class="text-3xl font-bold text-white">🎮 Pixel Chat Admin</h1>
+    <div class="flex gap-2">
+      <a href="chat.html" class="btn btn-primary btn-sm">Chat</a>
+      <button class="btn btn-error btn-sm" onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <div class="grid md:grid-cols-3 gap-4 mb-6">
+
+    <div class="glass p-4 rounded-xl text-center text-white">
+      <h2 class="text-lg">Users</h2>
+      <p id="totalUsers" class="text-2xl font-bold">0</p>
+    </div>
+
+    <div class="glass p-4 rounded-xl text-center text-white">
+      <h2 class="text-lg">Online</h2>
+      <p id="onlineUsers" class="text-2xl font-bold">0</p>
+    </div>
+
+    <div class="glass p-4 rounded-xl text-center text-white">
+      <h2 class="text-lg">Messages</h2>
+      <p id="totalMessages" class="text-2xl font-bold">-</p>
+    </div>
+
+  </div>
+
+  <div class="glass p-4 rounded-xl mb-6">
+    <h2 class="text-xl text-white mb-3">User Management</h2>
+    <div id="userList" class="space-y-2"></div>
+  </div>
+
+<script>
+const API = "http://localhost:5000/api";
+const token = localStorage.getItem("token");
+const user = JSON.parse(localStorage.getItem("user"));
+
+if (!user || user.role !== "admin") {
+  window.location.href = "index.html";
+}
+
+function logout() {
+  localStorage.clear();
+  window.location.href = "index.html";
+}
+
+async function loadUsers() {
+  const res = await fetch(`${API}/auth/users`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+
+  const users = await res.json();
+
+  document.getElementById("totalUsers").innerText = users.length;
+
+  const container = document.getElementById("userList");
+  container.innerHTML = "";
+
+  users.forEach(u => {
+    const div = document.createElement("div");
+    div.className = "flex justify-between items-center bg-black/30 p-3 rounded text-white";
+
+    div.innerHTML = `
+      <span>${u.username} (${u.role})</span>
+      <div class="flex gap-2">
+        ${
+          u.role !== "admin"
+            ? `<button class="btn btn-xs btn-warning" onclick="makeAdmin(${u.id})">Make Admin</button>`
+            : `<button class="btn btn-xs btn-success" disabled>Admin</button>`
+        }
+        <button class="btn btn-xs btn-error" onclick="deleteUser(${u.id})">Delete</button>
+      </div>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+async function makeAdmin(id) {
+  if (!confirm("Make this user admin?")) return;
+
+  const res = await fetch(`${API}/auth/role/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ role: "admin" })
+  });
+
+  const data = await res.json();
+
+  if (res.ok) {
+    alert("User is now admin ✅");
+    loadUsers();
+  } else {
+    alert(data.message);
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm("Delete this user?")) return;
+
+  const res = await fetch(`${API}/auth/${id}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const data = await res.json();
+
+  if (res.ok) {
+    alert("User deleted 🗑️");
+    loadUsers();
+  } else {
+    alert(data.message);
+  }
+}
+
+loadUsers();
+</script>
+
+</body>
+</html>

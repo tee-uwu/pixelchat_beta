@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pixel Chat - Login</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet"/>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #1e293b, #020617);
+      font-family: 'Courier New', monospace;
+      position: relative;
+    }
+
+    .trail-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .robot {
+      position: fixed;
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      transform: translate(-50%, -50%) scale(1);
+      background: linear-gradient(135deg, rgba(139,92,246,0.95), rgba(99,102,241,0.92));
+      border: 1px solid rgba(255,255,255,0.45);
+      box-shadow: 0 0 10px rgba(99,102,241,0.55), 0 0 22px rgba(139,92,246,0.35);
+      opacity: 0.95;
+      animation: robotFade 950ms ease-out forwards;
+    }
+
+    .robot::before,
+    .robot::after {
+      content: "";
+      position: absolute;
+      top: 9px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 8px #fff;
+    }
+
+    .robot::before { left: 6px; }
+    .robot::after { right: 6px; }
+
+    .robot span {
+      position: absolute;
+      left: 50%;
+      bottom: 5px;
+      width: 10px;
+      height: 2px;
+      transform: translateX(-50%);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.95);
+      box-shadow: 0 0 8px rgba(255,255,255,0.8);
+    }
+
+    .robot .ant-left,
+    .robot .ant-right {
+      position: absolute;
+      top: -5px;
+      width: 2px;
+      height: 7px;
+      background: rgba(255,255,255,0.75);
+      border-radius: 999px;
+      box-shadow: 0 0 8px rgba(255,255,255,0.35);
+    }
+
+    .robot .ant-left {
+      left: 7px;
+      transform: rotate(-18deg);
+    }
+
+    .robot .ant-right {
+      right: 7px;
+      transform: rotate(18deg);
+    }
+
+    @keyframes robotFade {
+      0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        filter: blur(0);
+      }
+      100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.25) rotate(16deg);
+        filter: blur(2px);
+      }
+    }
+
+    .glass {
+      position: relative;
+      z-index: 10;
+      backdrop-filter: blur(25px);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    }
+
+    .neon {
+      text-shadow: 0 0 8px #8b5cf6, 0 0 20px #6366f1;
+    }
+
+    .input:focus {
+      box-shadow: 0 0 10px #6366f1;
+      border-color: #6366f1;
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      border: none;
+      box-shadow: 0 0 10px #6366f1;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 20px #8b5cf6;
+    }
+
+    .typing {
+      overflow: hidden;
+      border-right: 2px solid #8b5cf6;
+      white-space: nowrap;
+      animation: typing 3s steps(20), blink 0.7s infinite;
+    }
+
+    @keyframes typing {
+      from { width: 0 }
+      to { width: 100% }
+    }
+
+    @keyframes blink {
+      50% { border-color: transparent }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+
+  <div class="trail-layer" id="trailLayer"></div>
+
+  <div class="glass p-8 rounded-2xl w-full max-w-md">
+    <h1 class="text-3xl text-center font-bold mb-6 text-white neon typing">🎮 Pixel Chat</h1>
+
+    <input id="loginEmail" class="input input-bordered w-full mb-3" placeholder="Email" />
+    <input id="loginPassword" type="password" class="input input-bordered w-full mb-4" placeholder="Password" />
+
+    <button class="btn btn-primary w-full" onclick="login()">Login</button>
+
+    <p class="text-center text-sm mt-4 text-gray-300">
+      dont have an account? pera nai notun account khulen
+    </p>
+
+    <button onclick="goRegister()" class="btn btn-outline w-full mt-2 text-white">
+      Create Account
+    </button>
+  </div>
+
+<script>
+const API = "http://localhost:5000/api";
+
+async function login() {
+  const email = document.getElementById("loginEmail").value;
+  const password = document.getElementById("loginPassword").value;
+
+  if (!email || !password) {
+    alert("Fill all fields");
+    return;
+  }
+
+  const res = await fetch(`${API}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+
+  const data = await res.json();
+
+  if (res.ok) {
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+
+    if (data.user.role === "admin") {
+      window.location.href = "admin.html";
+    } else {
+      window.location.href = "chat.html";
+    }
+  } else {
+    alert(data.message);
+  }
+}
+
+function goRegister() {
+  window.location.href = "register.html";
+}
+
+const trailLayer = document.getElementById("trailLayer");
+let lastTime = 0;
+
+function createRobot(x, y) {
+  const robot = document.createElement("div");
+  robot.className = "robot";
+  robot.style.left = x + "px";
+  robot.style.top = y + "px";
+
+  const mouth = document.createElement("span");
+  const antLeft = document.createElement("i");
+  const antRight = document.createElement("i");
+
+  antLeft.className = "ant-left";
+  antRight.className = "ant-right";
+
+  robot.appendChild(mouth);
+  robot.appendChild(antLeft);
+  robot.appendChild(antRight);
+  trailLayer.appendChild(robot);
+
+  setTimeout(() => robot.remove(), 900);
+}
+
+window.addEventListener("mousemove", (e) => {
+  const now = Date.now();
+  if (now - lastTime < 35) return;
+  lastTime = now;
+  createRobot(e.clientX, e.clientY);
+});
+</script>
+
+</body>
+</html>
