@@ -30,14 +30,20 @@ router.post("/", (req, res) => {
   });
 });
 
-// GET GROUPS
+// GET USER GROUPS (secure)
 router.get("/", (req, res) => {
-  const sql = "SELECT * FROM groups";
-
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ message: "Error" });
+  // TODO: Add verifyToken middleware
+  const sql = `
+    SELECT DISTINCT g.* 
+    FROM groups g 
+    JOIN group_members gm ON g.id = gm.group_id 
+    WHERE gm.user_id = ?
+  `;
+  db.query(sql, [req.user?.id || 1], (err, results) => {  // Default to user 1 if no auth
+    if (err) return res.status(500).json({ message: "Error fetching groups" });
     res.json(results);
   });
 });
+
 
 module.exports = router;

@@ -8,16 +8,15 @@ const db = mysql.createConnection({
   database: process.env.DB_NAME,
   port: process.env.DB_PORT,
 
-  ssl: {
-    rejectUnauthorized: false
-  }
+  ssl: false // ✅ important for localhost
 });
 
-db.connect(err => {
+db.connect((err) => {
   if (err) {
-    console.error("Database connection failed:", err);
+    console.error("❌ Database connection failed:");
+    console.error(err);
   } else {
-    console.log("MySQL connected ✅");
+    console.log("✅ MySQL connected successfully");
   }
 });
 
