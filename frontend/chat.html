@@ -395,7 +395,11 @@ const SOCKET_URL = "https://pixelchat-beta.onrender.com";
       const fileInput = document.getElementById("fileInput");
       const sendBtn = document.getElementById("sendBtn");
 
-      if (!selectedUser) return;
+      // Prevent double-send while upload is in progress
+      if (!selectedUser || sendBtn.disabled) return;
+
+      // Don't send completely empty messages
+      if (!val && !currentAttachment && !editingMessageId) return;
 
       if (editingMessageId) {
         // Fallback socket edit (backend socket handler)
