@@ -21,7 +21,11 @@ const PORT = process.env.PORT || 5000;
 /* ---------------- MIDDLEWARE ---------------- */
 
 app.use(cors({
-  origin: ["http://localhost", "http://localhost/pixel-chat"],
+  origin: [
+    "http://localhost",
+    "http://localhost/pixel-chat",
+    "https://pixelchat-beta.vercel.app"
+  ],
   credentials: true
 }));
 
@@ -70,7 +74,11 @@ app.put("/api/messages/seen/:id", (req, res) => {
 
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost", "http://localhost/pixel-chat"],
+    origin: [
+      "http://localhost",
+      "http://localhost/pixel-chat",
+      "https://pixelchat-beta.vercel.app"
+    ],
     credentials: true
   }
 });
