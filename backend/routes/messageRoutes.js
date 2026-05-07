@@ -176,15 +176,15 @@ router.post("/upload", verifyToken, upload.single('file'), (req, res) => {
   }
 
   // Determine type
-  const mimetype = req.file.mimetype;
-  const attachment_type = mimetype.startsWith('image/') || mimetype === 'image/gif' ? 'image' : 'file';
-  const attachment_url = `/uploads/${req.file.filename}`;
-  const filename = req.file.originalname;
+ // NEW FIXED PORTION
+const mimetype = req.file.mimetype;
+// Logic: If it starts with image/, it is an 'image'. Otherwise, it is a 'file'.
+const attachment_type = mimetype.startsWith('image/') ? 'image' : 'file';
+const attachment_url = `/uploads/${req.file.filename}`;
+const filename = req.file.originalname;
 
-  let messageText = message || null;
-  if (!messageText && attachment_type === 'pdf' || attachment_type === 'file') {
-    messageText = filename;
-  }
+// Ensure messageText is not empty. For files/images, use the original filename if no caption is provided.
+let messageText = message && message.trim() !== "" ? message : filename;
 
   const sql = `INSERT INTO messages (sender_id, receiver_id, message, attachment_url, attachment_type)
                VALUES (?, ?, ?, ?, ?)`;
