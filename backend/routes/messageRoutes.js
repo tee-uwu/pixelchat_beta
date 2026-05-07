@@ -186,9 +186,9 @@ const filename = req.file.originalname;
 // Ensure messageText is not empty. For files/images, use the original filename if no caption is provided.
 let messageText = message && message.trim() !== "" ? message : filename;
 
-  const sql = `INSERT INTO messages (sender_id, receiver_id, message, attachment_url, attachment_type)
-               VALUES (?, ?, ?, ?, ?)`;
-  db.query(sql, [senderId, receiver_id, messageText, attachment_url, attachment_type], (err, result) => {
+  const sql = `INSERT INTO messages (sender_id, receiver_id, message, attachment_url, attachment_type, seen)
+             VALUES (?, ?, ?, ?, ?, FALSE)`;
+ db.query(sql, [senderId, receiver_id, messageText, attachment_url, attachment_type], (err, result) => {
     if (err) {
       console.error('DB insert error:', err);
       return res.status(500).json({ error: 'Database error' });
