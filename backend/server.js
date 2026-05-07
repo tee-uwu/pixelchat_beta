@@ -5,7 +5,9 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
+const path = require("path");
 const db = require("./db");
+
 
 const authRoutes = require("./routes/authRoutes");
 const messageRoutes = require("./routes/messageRoutes");
@@ -24,6 +26,11 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, '../frontend')));
+
 
 /* ---------------- ROUTES ---------------- */
 
@@ -55,9 +62,9 @@ app.put("/api/messages/seen/:id", (req, res) => {
   });
 });
 
-app.get("/", (req, res) => {
-  res.send("Chat server is running 🚀");
-});
+// Frontend served via static middleware above
+
+
 
 /* ---------------- SOCKET.IO ---------------- */
 
@@ -93,6 +100,13 @@ io.on("connection", (socket) => {
   onlineUsers.set(userId, socket.id);
 
   console.log(`User connected: ${socket.user.username}`);
+  
+  // Send current user last_active update to all
+  const now = new Date().toISOString();
+  io.emit("user_last_active", {
+    userId,
+    last_active: now
+  });
 
   socket.emit("online_users", Array.from(onlineUsers.keys()));
 
@@ -186,12 +200,34 @@ io.on("connection", (socket) => {
     });
   });
 
+  // Global online status + last_active update
+  socket.on("user_status", ({ status }) => {
+    io.emit("user_status", {
+      userId: socket.user.id,
+      status: status || "online"
+    });
+    
+// Update last_active on activity - only for offline users
+    const now = new Date().toISOString();
+    io.emit("user_last_active", {
+      userId: socket.user.id,
+      last_active: now
+    });
+  });
+
   /* ---------------- DISCONNECT ---------------- */
 
   socket.on("disconnect", () => {
     onlineUsers.delete(userId);
 
     console.log(`User disconnected: ${socket.user.username}`);
+
+    // Update last_active on disconnect
+    const now = new Date().toISOString();
+    io.emit("user_last_active", {
+      userId,
+      last_active: now
+    });
 
     io.emit("user_status", {
       userId,

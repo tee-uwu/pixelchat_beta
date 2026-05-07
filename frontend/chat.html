@@ -6,14 +6,22 @@
   <title>Pixel Chat</title>
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
   <style>
     body {
       background: radial-gradient(circle at top, #1e293b, #020617 65%);
-      font-family: 'Courier New', monospace;
+      font-family: 'Orbitron', monospace;
+      font-size: 0.85rem;
+      line-height: 1.3;
       overflow: hidden;
+    }
+    
+    .font-bold {
+      font-family: 'Orbitron', monospace !important;
+      font-weight: 900 !important;
     }
 
     .glass {
@@ -123,8 +131,16 @@
 
             <div class="flex items-end gap-2">
               <button class="btn btn-square btn-ghost-lite shrink-0" onclick="toggleEmoji()">😀</button>
-              <div class="flex-1">
-                <input id="messageInput" class="input input-bordered w-full" placeholder="Type message..." autocomplete="off" />
+              <label for="fileInput" class="btn btn-square btn-ghost-lite shrink-0">
+                📎
+                <input id="fileInput" type="file" class="hidden" accept="image/*,.pdf" onchange="handleFile()">
+              </label>
+              <div class="flex-1 relative">
+                <input id="messageInput" class="input input-bordered w-full pr-12" placeholder="Type message or attach file..." autocomplete="off" />
+                <div id="attachmentPreview" class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs bg-blue-500 text-white px-2 py-1 rounded opacity-0 transition-all hidden group">
+                  <span id="previewText"></span>
+                  <button onclick="cancelAttachment()" class="text-xs hover:text-red-300 ml-1" title="Cancel">✕</button>
+                </div>
               </div>
               <button id="sendBtn" class="btn btn-primary shrink-0 px-4 md:px-5" onclick="sendMessage()">Send</button>
             </div>
@@ -153,10 +169,18 @@ const SOCKET_URL = "http://localhost:5000";
       socket.on("receive_message", (msg) => {
         if (selectedUser && (msg.sender_id === selectedUser.id || msg.sender_id === currentUser.id)) {
             appendMessage(msg);
+            
+            // Mark as seen if not own message
+            if (msg.sender_id !== currentUser.id && !msg.seen) {
+              fetch(`${API}/messages/seen/${msg.id}`, { 
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` }
+              }).catch(console.error);
+            }
         }
       });
 
-      // 🔽 ADDED: Online Users Bulk Update
+      //  Online Users Bulk Update
       socket.on("online_users", (users) => {
         users.forEach(userId => {
           const el = document.getElementById(`status-${userId}`);
@@ -178,6 +202,14 @@ const SOCKET_URL = "http://localhost:5000";
         }
       });
 
+      socket.on("user_last_active", ({ userId, last_active }) => {
+        const el = document.getElementById(`last-active-${userId}`);
+        if (el) {
+          const timeAgo = new Date(last_active).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+          el.textContent = `Last active: ${timeAgo}`;
+        }
+      });
+
       // 🔽 Typing Indicators
       socket.on("typing", ({ sender_id }) => {
         if (selectedUser && sender_id === selectedUser.id) {
@@ -191,15 +223,19 @@ const SOCKET_URL = "http://localhost:5000";
         }
       });
 
-      // 🔽 UPDATED: Message Edited (Safer Fix)
+      // 🔽 Message Edited 
       socket.on("message_edited", (data) => {
-          const id = data.id || data.message_id;
-          const text = data.message || data.new_message || data.content;
+          const id = data.id;
+          const text = data.message;
           
           const container = document.getElementById(`msg-${id}`);
           if (container) {
             const bubble = container.querySelector(".chat-bubble");
-            if (bubble) bubble.innerText = text + " (edited)";
+            if (bubble) {
+              const existingEdited = bubble.querySelector('.edited-badge');
+              if (existingEdited) existingEdited.remove();
+              bubble.innerHTML = text.replace(/<span class="edited-badge[^>]*>.*?<\/span>$/i, '') + ' <span class="edited-badge text-[10px] opacity-60 italic ml-1">(edited)</span>';
+            }
           }
       });
 
@@ -219,11 +255,12 @@ const SOCKET_URL = "http://localhost:5000";
         btn.className = `user-card w-full p-3 text-left rounded-xl transition flex justify-between items-center ${selectedUser?.id === user.id ? 'active' : ''}`;
         btn.onclick = () => selectUser(user);
         btn.innerHTML = `
-          <div>
-            <div class="font-bold">${user.username}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold truncate">${user.username}</div>
             <div class="text-xs opacity-50">${user.role}</div>
+            <div id="last-active-${user.id}" class="text-xs opacity-60 mt-1">Last active: --</div>
           </div>
-          <span id="status-${user.id}" class="text-[10px] px-2 py-[2px] rounded-full bg-gray-500">offline</span>
+          <span id="status-${user.id}" class="text-[10px] px-2 py-[2px] rounded-full bg-gray-500 ml-auto">offline</span>
         `;
         list.appendChild(btn);
       });
@@ -235,6 +272,17 @@ const SOCKET_URL = "http://localhost:5000";
       loadUsers();
       const res = await fetch(`${API}/messages/${user.id}`, { headers: { Authorization: `Bearer ${token}` } });
       const messages = await res.json();
+      
+      // Mark all messages as seen
+      messages.forEach(msg => {
+        if (msg.sender_id !== currentUser.id && !msg.seen) {
+          fetch(`${API}/messages/seen/${msg.id}`, { 
+            method: 'PUT',
+            headers: { Authorization: `Bearer ${token}` }
+          }).catch(console.error);
+        }
+      });
+      
       const container = document.getElementById("messages");
       container.innerHTML = "";
       messages.forEach(msg => appendMessage(msg));
@@ -269,10 +317,19 @@ const SOCKET_URL = "http://localhost:5000";
       }
 
       div.innerHTML = `
-        <div class="chat-header opacity-50 text-[10px] mb-1 px-1">${msg.sender_name || (isOwn ? currentUser.username : selectedUser?.username)}</div>
+              <div class="chat-header opacity-50 text-[10px] mb-1 px-1 flex items-center gap-1">
+                ${msg.sender_name || (isOwn ? currentUser.username : selectedUser?.username)}
+                ${!isOwn && msg.seen ? '<span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>' : ''}
+              </div>
         <div class="flex items-center">
             ${isOwn ? menuHtml : ''}
-            <div class="chat-bubble ${isOwn ? 'chat-bubble-primary' : 'chat-bubble-pink'}">${msg.message}</div>
+            <div class="chat-bubble ${isOwn ? 'chat-bubble-primary' : 'chat-bubble-pink'}">
+              ${msg.message || ''}
+              ${msg.attachment_url ? `
+                <br>
+                ${msg.attachment_type === 'image' ? `<img src="${msg.attachment_url}" class="max-w-[200px] max-h-[200px] rounded-lg mt-1 shadow-lg object-cover cursor-pointer hover:scale-110 transition-transform z-10 relative" alt="Attachment" onclick="showImagePreview('${msg.attachment_url}')">` : `<a href="${msg.attachment_url}" target="_blank" class="text-blue-300 underline">[${msg.attachment_type.toUpperCase()}] View</a>`}
+              ` : ''}
+            </div>
             ${!isOwn ? menuHtml : ''}
         </div>`;
         
@@ -280,26 +337,131 @@ const SOCKET_URL = "http://localhost:5000";
       document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
     }
 
+    let currentAttachment = null;
+
+    function handleFile() {
+      const fileInput = document.getElementById("fileInput");
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        alert("File too large (max 10MB)");
+        return;
+      }
+
+      const preview = document.getElementById("attachmentPreview");
+      const previewText = document.getElementById("previewText");
+      previewText.textContent = file.name;
+      preview.classList.remove("hidden", "opacity-0");
+      currentAttachment = file;
+    }
+
+    function cancelAttachment() {
+      document.getElementById("fileInput").value = "";
+      document.getElementById("attachmentPreview").classList.add("hidden");
+      document.getElementById("previewText").textContent = "";
+      currentAttachment = null;
+    }
+
+    function showImagePreview(url) {
+      const modal = document.createElement('div');
+      modal.id = 'imageModal';
+      modal.className = 'fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4';
+      modal.innerHTML = `
+        <div class="flex flex-col items-center max-w-4xl max-h-[90vh]">
+          <img src="${url}" class="max-w-full max-h-[70vh] rounded-2xl shadow-2xl cursor-zoom-out hover:scale-105 transition">
+          <button onclick="closeImagePreview()" class="mt-4 btn btn-error btn-sm px-6">Close</button>
+        </div>
+      `;
+      document.body.appendChild(modal);
+      modal.onclick = (e) => e.target === modal && closeImagePreview();
+    }
+
+    function closeImagePreview() {
+      const modal = document.getElementById('imageModal');
+      if (modal) modal.remove();
+    }
+
     function sendMessage() {
       const input = document.getElementById("messageInput");
       const val = input.value.trim();
-      if (!val || !selectedUser) return;
+      const fileInput = document.getElementById("fileInput");
+      const sendBtn = document.getElementById("sendBtn");
+
+      if (!selectedUser) return;
 
       if (editingMessageId) {
-          socket.emit("edit_message", { id: editingMessageId, message_id: editingMessageId, message: val, new_message: val });
-          editingMessageId = null;
-          document.getElementById("sendBtn").innerText = "Send";
+        // Fallback socket edit (backend socket handler)
+        socket.emit("edit_message", { id: editingMessageId, new_message: val });
+        
+        editingMessageId = null;
+        sendBtn.innerText = "Send";
+        input.value = '';
+        return;
+      } 
+
+      // Set loading state - simulate delay for visibility
+      sendBtn.innerText = "Uploading...";
+      sendBtn.disabled = true;
+      sendBtn.classList.add("loading");
+
+      if (currentAttachment) {
+        const formData = new FormData();
+        formData.append("receiver_id", selectedUser.id);
+        formData.append("message", val || "📎 " + currentAttachment.name);
+        formData.append("file", currentAttachment);
+        
+        fetch(`${API}/messages/upload`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        })
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+          return res.json();
+        })
+        .then(data => {
+          // Success: show message, delay clear preview to show "working"
+          appendMessage(data);
+          setTimeout(() => {
+            input.value = "";
+            fileInput.value = "";
+            document.getElementById("attachmentPreview").classList.add("hidden");
+            currentAttachment = null;
+            document.getElementById("emojiBox").classList.add("hidden");
+          }, 1500); // 1.5s delay so user sees it "process"
+          // Reset button
+          sendBtn.innerText = "Send";
+          sendBtn.disabled = false;
+          sendBtn.classList.remove("loading");
+        })
+        .catch(err => {
+          console.error("Upload failed:", err);
+          alert(`Upload failed: ${err.message}. Please try again.`);
+          // Reset button only, keep attachment
+          sendBtn.innerText = "Send";
+          sendBtn.disabled = false;
+          sendBtn.classList.remove("loading");
+        });
       } else {
-          socket.emit("private_message", { receiver_id: selectedUser.id, message: val });
+        socket.emit("private_message", { 
+          receiver_id: selectedUser.id, 
+          message: val 
+        });
+        // Clear text input for non-attachment messages
+        input.value = "";
+        document.getElementById("emojiBox").classList.add("hidden");
+        // Reset button
+        sendBtn.innerText = "Send";
+        sendBtn.disabled = false;
+        sendBtn.classList.remove("loading");
       }
-      input.value = "";
-      document.getElementById("emojiBox").classList.add("hidden");
     }
 
     function prepareEdit(id, text) {
         editingMessageId = id;
         const input = document.getElementById("messageInput");
-        input.value = text;
+        input.value = decodeURIComponent(text);
         input.focus();
         document.getElementById("sendBtn").innerText = "Update";
     }
@@ -328,6 +490,8 @@ const SOCKET_URL = "http://localhost:5000";
     let typingTimeout;
     document.getElementById("messageInput").addEventListener("input", () => {
       if (!selectedUser) return;
+      // Update status to online for everyone when typing
+      socket.emit("user_status", { status: "online" });
       socket.emit("typing", { receiver_id: selectedUser.id });
       clearTimeout(typingTimeout);
       typingTimeout = setTimeout(() => {
@@ -336,6 +500,13 @@ const SOCKET_URL = "http://localhost:5000";
     });
 
     document.getElementById("messageInput").onkeydown = (e) => { if (e.key === "Enter") sendMessage(); };
+
+    // Ping activity every 30s when user selected
+    setInterval(() => {
+      if (selectedUser) {
+        socket.emit("user_active", { receiver_id: selectedUser.id });
+      }
+    }, 30000);
 
     connectSocket();
     loadUsers();

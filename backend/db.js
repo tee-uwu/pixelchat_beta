@@ -8,7 +8,7 @@ const db = mysql.createConnection({
   database: process.env.DB_NAME,
   port: process.env.DB_PORT,
 
-  ssl: false // ✅ important for localhost
+  ssl: false // 
 });
 
 db.connect((err) => {
